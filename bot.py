@@ -1,5 +1,6 @@
 import os
 import requests
+from datetime import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
@@ -48,6 +49,8 @@ def update_activity(user_id, post_id, update_data):
 # ⭐ Основная логика начисления баллов
 def update_score(user_id, username, post_id, action_type):
     existing = get_activity(user_id, post_id)
+    now = datetime.utcnow().isoformat()  # дата и время действия
+
     if existing:
         record = existing[0]
         reacted = record.get("reacted", False)
@@ -68,7 +71,8 @@ def update_score(user_id, username, post_id, action_type):
             update_activity(user_id, post_id, {
                 "reacted": new_reacted,
                 "commented": new_commented,
-                "score": score + score_delta
+                "score": score + score_delta,
+                "date": now
             })
     else:
         score = 1 if action_type == "reaction" else 5
@@ -78,7 +82,8 @@ def update_score(user_id, username, post_id, action_type):
             "post_id": post_id,
             "reacted": action_type == "reaction",
             "commented": action_type == "comment",
-            "score": score
+            "score": score,
+            "date": now
         })
 
 # 👀 Отслеживание комментариев (reply на пост канала)
@@ -102,9 +107,7 @@ async def comment_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 🚀 Запуск бота
 def main():
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-
     app.add_handler(MessageHandler(filters.REPLY, comment_listener))
-
     print("Бот запущен...")
     app.run_polling()
 
