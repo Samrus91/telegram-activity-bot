@@ -1,2 +1,2 @@
 python-telegram-bot==20.6
-postgrest-py==0.10.6
+requests==2.31.0
