@@ -1,2 +1,3 @@
 python-telegram-bot==20.6
-supabase-py==1.0.3
+supabase==1.0.3
+httpx==0.25.2
