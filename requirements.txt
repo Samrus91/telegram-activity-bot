@@ -1,2 +1,2 @@
 python-telegram-bot==20.6
-supabase-py==0.0.3
+postgrest-py==0.10.6
