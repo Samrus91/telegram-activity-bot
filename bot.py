@@ -16,24 +16,30 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-# ➕ Добавление новой активности
+# ➕ Добавление новой активности с логированием
 def insert_activity(data):
     response = requests.post(SUPABASE_URL, json=data, headers=HEADERS)
+    if response.status_code >= 400:
+        print("❌ Insert Error:", response.status_code, response.text)
     return response.json()
 
-# 🔍 Получение активности по user_id и post_id
+# 🔍 Получение активности по user_id и post_id с логом
 def get_activity(user_id, post_id):
     params = {
         "user_id": f"eq.{user_id}",
         "post_id": f"eq.{post_id}"
     }
     response = requests.get(SUPABASE_URL, headers=HEADERS, params=params)
+    if response.status_code >= 400:
+        print("❌ Get Error:", response.status_code, response.text)
     return response.json()
 
-# 🔄 Обновление записи
+# 🔄 Обновление записи с логом
 def update_activity(user_id, post_id, update_data):
     url = f"{SUPABASE_URL}?user_id=eq.{user_id}&post_id=eq.{post_id}"
     response = requests.patch(url, headers=HEADERS, json=update_data)
+    if response.status_code >= 400:
+        print("❌ Update Error:", response.status_code, response.text)
     return response.json()
 
 # ⭐ Основная логика начисления баллов
@@ -72,7 +78,7 @@ def update_score(user_id, username, post_id, action_type):
             "score": score
         })
 
-# 🗣 Обработчик команды /commented (пример использования)
+# 🗣 Обработчик команды /commented
 async def commented_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     message = update.message
