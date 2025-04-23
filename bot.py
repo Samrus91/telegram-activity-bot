@@ -1,12 +1,15 @@
 import os
 import requests
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 
 # Получаем переменные окружения
 SUPABASE_URL = os.environ.get("SUPABASE_URL") + "/rest/v1/user_activity"
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+# Укажи свой ID канала
+YOUR_CHANNEL_ID = -1001234567890  # Заменить на реальный ID
 
 # Заголовки для работы с Supabase
 HEADERS = {
@@ -16,14 +19,14 @@ HEADERS = {
     "Prefer": "return=representation"
 }
 
-# ➕ Добавление новой активности с логированием
+# ➕ Добавление новой активности
 def insert_activity(data):
     response = requests.post(SUPABASE_URL, json=data, headers=HEADERS)
     if response.status_code >= 400:
         print("❌ Insert Error:", response.status_code, response.text)
     return response.json()
 
-# 🔍 Получение активности по user_id и post_id с логом
+# 🔍 Получение активности по user_id и post_id
 def get_activity(user_id, post_id):
     params = {
         "user_id": f"eq.{user_id}",
@@ -34,7 +37,7 @@ def get_activity(user_id, post_id):
         print("❌ Get Error:", response.status_code, response.text)
     return response.json()
 
-# 🔄 Обновление записи с логом
+# 🔄 Обновление записи
 def update_activity(user_id, post_id, update_data):
     url = f"{SUPABASE_URL}?user_id=eq.{user_id}&post_id=eq.{post_id}"
     response = requests.patch(url, headers=HEADERS, json=update_data)
@@ -78,28 +81,29 @@ def update_score(user_id, username, post_id, action_type):
             "score": score
         })
 
-# 🗣 Обработчик команды /commented
-async def commented_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
+# 👀 Отслеживание комментариев (reply на пост канала)
+async def comment_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
+    user = update.effective_user
 
-    if not message:
+    if not message or not message.reply_to_message:
         return
 
+    parent = message.reply_to_message
+    post_id = parent.message_id
     user_id = user.id
     username = user.username or user.full_name
-    post_id = message.reply_to_message.message_id if message.reply_to_message else message.message_id
 
-    update_score(user_id, username, post_id, "comment")
-
-    await message.reply_text("Комментарий учтён! +5 баллов 😉")
+    # Проверяем, что комментарий к посту в канале
+    if parent.sender_chat and parent.sender_chat.id == YOUR_CHANNEL_ID:
+        update_score(user_id, username, post_id, "comment")
+        print(f"✅ Комментарий от {username} учтён (post_id: {post_id})")
 
 # 🚀 Запуск бота
 def main():
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
 
-    # Добавляем обработчик команды
-    app.add_handler(CommandHandler("commented", commented_handler))
+    app.add_handler(MessageHandler(filters.REPLY, comment_listener))
 
     print("Бот запущен...")
     app.run_polling()
