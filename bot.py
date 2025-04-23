@@ -9,7 +9,7 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("BOT_TOKEN")
 
 # Укажи свой ID канала
-YOUR_CHANNEL_ID = -1001234567890  # Заменить на реальный ID
+YOUR_CHANNEL_ID = -1002560987482  # Заменить на реальный ID
 
 # Заголовки для работы с Supabase
 HEADERS = {
