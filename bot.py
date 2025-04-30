@@ -75,7 +75,7 @@ def update_score(user_id, username, post_id, action_type):
                 "date": now
             })
     else:
-        score = 1 if action_type == "reaction" else 5
+        score = 1 if action_type == "reaction" else 20
         insert_activity({
             "user_id": user_id,
             "username": username,
