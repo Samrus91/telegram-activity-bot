@@ -65,7 +65,7 @@ def update_score(user_id, username, post_id, action_type):
             score_delta += 1
         elif action_type == "comment" and not commented:
             new_commented = True
-            score_delta += 5
+            score_delta += 20
 
         if score_delta > 0:
             update_activity(user_id, post_id, {
