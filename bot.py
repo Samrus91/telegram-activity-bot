@@ -1,4 +1,4 @@
-import os
+import os 
 import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -54,20 +54,25 @@ def update_score(user_id, username, post_id, action_type, extra=None):
     existing = get_activity(user_id, post_id)
     now = datetime.now(ZoneInfo("Europe/Moscow")).isoformat()
     score_map = {"comment": 20, "poll": 10, "reaction": 10}
-    updates = {"date": now}
-    for key in ["reacted", "commented", "polled"]:
-        updates[key] = False
 
-    updates[action_type + "ed" if action_type != "poll" else "polled"] = True
-    updates["score"] = score_map[action_type]
-    if extra:
-        updates.update(extra)
+    # Определение поля-флага по типу действия
+    flag_field = "reacted" if action_type == "reaction" else (
+        "commented" if action_type == "comment" else "polled"
+    )
 
     if existing:
         record = existing[0]
-        if not record.get(action_type + "ed" if action_type != "poll" else "polled", False):
-            updates["score"] += record.get("score", 0)
-            update_activity(user_id, post_id, updates)
+        if record.get(flag_field):
+            print(f"⚠️ {action_type} уже учтён для user_id={user_id}, post_id={post_id}")
+            return
+
+        updates = {
+            "date": now,
+            flag_field: True,
+            "score": record.get("score", 0) + score_map[action_type],
+            "poll_option": extra.get("poll_option") if extra else None
+        }
+        update_activity(user_id, post_id, updates)
     else:
         insert_activity({
             "user_id": user_id,
@@ -76,7 +81,7 @@ def update_score(user_id, username, post_id, action_type, extra=None):
             "reacted": action_type == "reaction",
             "commented": action_type == "comment",
             "polled": action_type == "poll",
-            "score": updates["score"],
+            "score": score_map[action_type],
             "date": now,
             "poll_option": extra.get("poll_option") if extra else None,
             "action_type": action_type
