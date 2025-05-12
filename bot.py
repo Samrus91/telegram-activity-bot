@@ -1,4 +1,4 @@
-import os 
+import os
 import requests
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -22,6 +22,7 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = -1002402728049
 POLL_IMAGE_URL = "https://downloader.disk.yandex.ru/preview/f46882adbaf5b8f9163fc0de114dd82ce682b422e519148d329c6bafcf7e7ca8/681241e4/nvlDwn1H-Rprc95XbK3mq6aOyPYARFI-VLCmRy4uY0k3ZNHrdJULX5d7KdaFTAgfTOMuU-TcW2Hz5u5dbR50tg%3D%3D?uid=0&filename=photo_2025-04-30_14-28-54.jpg&disposition=inline&hash=&limit=0&content_type=image%2Fjpeg&owner_uid=0&tknv=v2&size=2048x2048"
+ANOTHER_CHAT_ID = -1002516482222  # ← сюда вставь ID чата для уведомлений
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
@@ -53,25 +54,32 @@ def update_activity(user_id, post_id, update_data):
 def update_score(user_id, username, post_id, action_type, extra=None):
     existing = get_activity(user_id, post_id)
     now = datetime.now(ZoneInfo("Europe/Moscow")).isoformat()
-    score_map = {"comment": 20, "poll": 10, "reaction": 10}
+    score_map = {"comment": 20, "poll": 10, "reaction": 10, "registration": 0}
+    updates = {"date": now}
+    for key in ["reacted", "commented", "polled", "registered"]:
+        updates[key] = False
 
-    # Определение поля-флага по типу действия
-    flag_field = "reacted" if action_type == "reaction" else (
-        "commented" if action_type == "comment" else "polled"
-    )
+    if action_type == "registration":
+        updates["registered"] = True
+    else:
+        updates[action_type + "ed" if action_type != "poll" else "polled"] = True
+        updates["score"] = score_map[action_type]
+
+    if extra:
+        updates.update(extra)
 
     if existing:
         record = existing[0]
-        if record.get(flag_field):
+        flag = (
+            "registered" if action_type == "registration"
+            else action_type + "ed" if action_type != "poll"
+            else "polled"
+        )
+        if record.get(flag):
             print(f"⚠️ {action_type} уже учтён для user_id={user_id}, post_id={post_id}")
             return
-
-        updates = {
-            "date": now,
-            flag_field: True,
-            "score": record.get("score", 0) + score_map[action_type],
-            "poll_option": extra.get("poll_option") if extra else None
-        }
+        if action_type != "registration":
+            updates["score"] += record.get("score", 0)
         update_activity(user_id, post_id, updates)
     else:
         insert_activity({
@@ -81,7 +89,8 @@ def update_score(user_id, username, post_id, action_type, extra=None):
             "reacted": action_type == "reaction",
             "commented": action_type == "comment",
             "polled": action_type == "poll",
-            "score": score_map[action_type],
+            "registered": action_type == "registration",
+            "score": updates.get("score", 0),
             "date": now,
             "poll_option": extra.get("poll_option") if extra else None,
             "action_type": action_type
@@ -158,27 +167,35 @@ async def poll_vote_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     print(f"📊 Голос от {user.username} за '{option}' учтён")
 
-# === Автодобавление реакций ===
+# === Автодобавление реакции или кнопки регистрации ===
 async def reaction_auto_add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.channel_post:
         return
     message = update.channel_post
+    text = message.text or message.caption or ""
 
-    if message.photo and message.caption and "Выбери вариант ниже:" in message.caption:
-        return  # опрос — не добавляем реакцию
-
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("👍 Очень полезно", callback_data=f"react_{message.message_id}_1")],
-        [InlineKeyboardButton("👌 Возможно пригодится", callback_data=f"react_{message.message_id}_2")],
-        [InlineKeyboardButton("👎 Не пригодилось", callback_data=f"react_{message.message_id}_3")]
-    ])
-
-    await context.bot.send_message(
-        chat_id=CHANNEL_ID,
-        text="Насколько был полезен этот материал?",
-        reply_markup=keyboard,
-        reply_to_message_id=message.message_id
-    )
+    if "#полезное" in text:
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("👍 Очень полезно", callback_data=f"react_{message.message_id}_1")],
+            [InlineKeyboardButton("👌 Возможно пригодится", callback_data=f"react_{message.message_id}_2")],
+            [InlineKeyboardButton("👎 Не пригодилось", callback_data=f"react_{message.message_id}_3")]
+        ])
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text="Насколько был полезен этот материал?",
+            reply_markup=keyboard,
+            reply_to_message_id=message.message_id
+        )
+    elif "#квиклер" in text:
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📝 Записаться", callback_data=f"register_{message.message_id}")]
+        ])
+        await context.bot.send_message(
+            chat_id=CHANNEL_ID,
+            text="Если хочешь принять участие, нажми кнопку ниже 👇",
+            reply_markup=keyboard,
+            reply_to_message_id=message.message_id
+        )
 
 # === Обработка реакции ===
 async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -203,6 +220,51 @@ async def callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     print(f"👍 Реакция от {user.username} учтена")
 
+# === Обработка регистрации ===
+async def register_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer(text="📌 Ты успешно записан!", show_alert=False)
+
+    user = query.from_user
+    registration_message_id = query.message.message_id
+    announcement_message_id = registration_message_id - 1
+
+    try:
+        # Получаем предыдущее сообщение (анонс вебинара)
+        announcement = await context.bot.forward_message(
+            chat_id=user.id,
+            from_chat_id=CHANNEL_ID,
+            message_id=announcement_message_id
+        )
+        preview_text = (announcement.text or announcement.caption or "").strip()[:100]
+    except Exception as e:
+        print(f"⚠️ Не удалось получить текст анонса: {e}")
+        preview_text = "(текст анонса недоступен)"
+
+    # Обновляем баллы (без начисления)
+    update_score(
+        user.id,
+        user.username or user.full_name,
+        announcement_message_id,
+        "registration",
+        {"poll_option": "📝 Записался"}
+    )
+
+    mention = f"@{user.username}" if user.username else f"{user.full_name} (id: {user.id})"
+    message_link = f"https://t.me/c/{str(CHANNEL_ID)[4:]}/{announcement_message_id}"
+
+    await context.bot.send_message(
+        chat_id=ANOTHER_CHAT_ID,
+        text=(
+            f"👤 Пользователь {mention} записался на вебинар\n"
+            f"📌 Пост: <i>{preview_text}</i>\n"
+            f"🔗 <a href=\"{message_link}\">Перейти к сообщению</a>"
+        ),
+        parse_mode="HTML"
+    )
+
+    print(f"📝 Запись от {user.username} учтена")
+    
 # === Запуск ===
 def main():
     app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
@@ -211,6 +273,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ChatType.PRIVATE, poll_handler))
     app.add_handler(CallbackQueryHandler(callback_handler, pattern=r"^react_"))
     app.add_handler(CallbackQueryHandler(poll_vote_handler, pattern=r"^poll_"))
+    app.add_handler(CallbackQueryHandler(register_handler, pattern=r"^register_"))
     app.add_handler(MessageHandler(filters.ALL & filters.UpdateType.CHANNEL_POST, reaction_auto_add))
 
     print("Бот запущен...")
