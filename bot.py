@@ -313,13 +313,28 @@ async def admin_score_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
     r = requests.get(SUPABASE_URL, headers=HEADERS)
     data = r.json() if r.ok else []
+
+    # Группировка по пользователям
     totals = {}
     for rec in data:
         u = rec.get("username")
         totals[u] = totals.get(u, 0) + rec.get("score", 0)
+
+    # Сортируем и формируем строки
     lines = [f"@{u} — {s} EXP" for u, s in sorted(totals.items(), key=lambda x: -x[1])]
+
     kb = [[InlineKeyboardButton("🔙 Вернуться в меню", callback_data="admin_back")]]
-    await update.callback_query.message.reply_text("\n".join(lines) or "Нет данных", reply_markup=InlineKeyboardMarkup(kb))
+
+    # === Разбиваем и отправляем по частям (лимит Telegram — 4096 символов) ===
+    chunk = ""
+    for line in lines:
+        if len(chunk) + len(line) + 1 > 4000:  # небольшой запас
+            await update.callback_query.message.reply_text(chunk.strip())
+            chunk = ""
+        chunk += line + "\n"
+
+    if chunk:
+        await update.callback_query.message.reply_text(chunk.strip(), reply_markup=InlineKeyboardMarkup(kb))
 
 async def admin_add_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.callback_query.answer()
