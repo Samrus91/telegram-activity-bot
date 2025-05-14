@@ -193,7 +193,7 @@ async def callback_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def poll_vote_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
-    await q.answer("❤️ Твой ответ принят! Учитывается только первый ответ!", show_alert=False)
+    await q.answer("❤️ Твой ответ принят! Учитывается только первый ответ!", show_alert=True)
     _, idx, opt = q.data.split("_", 2)
     update_score(
         user_id=q.from_user.id,
