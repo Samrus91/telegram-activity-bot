@@ -132,7 +132,7 @@ async def reaction_auto_add(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         btns = [
             [InlineKeyboardButton("👍 Очень полезно", callback_data=f"react_{post.message_id}_1")],
             [InlineKeyboardButton("👌 Возможно пригодится", callback_data=f"react_{post.message_id}_2")],
-            [InlineKeyboardButton("👎 Не пригодилось", callback_data=f"react_{post.message_id}_3")],
+            [InlineKeyboardButton("👎 Не пригодится", callback_data=f"react_{post.message_id}_3")],
         ]
     elif "#квиклерн" in txt:
         prompt = "Если хочешь принять участие, нажми кнопку ниже 👇"
